@@ -1,0 +1,620 @@
+---
+title: "Manuscript: Resistance screening assay for aerial blight"
+author: "Sara Thomas-Sharma"
+date: "2024-04-19"
+output: html_document
+---
+
+```{r}
+# get working directory
+getwd()
+```
+
+```{r setup, include=FALSE}
+# All necessary packages are assumed to be installed. 
+#Loading necessary packages 
+library("devtools")
+library("poppr")
+library("pegas")
+library("magrittr")
+library("lattice")
+library("mmod")
+library("ape")
+library('dplyr')
+library('ggplot2')
+library('dplyr')
+library('agricolae') # for AUDPC
+library('tidyverse')
+library('ggpubr')
+library('car')
+library('spearmanCI')
+library('psych')
+library('ggpattern')
+# for multiple comparisons and compact letter display
+library('emmeans')
+library('multcomp')
+library('multcompView')
+#to build linear model or linear mixed effects model
+library('lme4')
+library('lmerTest')
+library ("broom") # includes function tidy
+```
+
+
+# Analysis of microsatellite data
+
+Data and analysis used to generate Table 3 and Figure 3
+
+```{r}
+#Loading data
+KensyMS <- read.genalex("GenAlex_Results_Kensy_correctedv2.csv", ploidy = 2)
+
+#Running analysis to check different indexes (included in Table 3) 
+popdata <- poppr(KensyMS)
+popdata
+
+#Figure 3. Minimum Spanning Network
+partial_clone_sub <- popsub(KensyMS, exclude = character(0))
+partial_clone_dist <- diss.dist(partial_clone_sub, percent = FALSE, mat = FALSE)
+min_span_net <- poppr.msn(partial_clone_sub, partial_clone_dist, showplot = FALSE, include.ties = TRUE)
+
+set.seed(44)
+plot_poppr_msn(KensyMS,
+               min_span_net,
+               inds = "ALL",
+               mlg = FALSE,
+               gadj = 3,
+               nodescale = 25.25,
+               palette = rainbow,
+               cutoff = NULL,
+               quantiles = FALSE,
+               beforecut = TRUE)
+```
+
+# Fungicide resistance screening
+
+Data and analysis used to generate Table 4
+
+```{r}
+
+
+```
+
+# Coreblock variety screening 
+
+Data and analysis used to generate Table 5
+
+```{r}
+
+
+```
+
+
+# Analysis of detached leaf assay
+
+Data and analysis used to generate Figure 4
+
+
+```{r}
+#Loading data
+Scatter<-read.csv(file = 'Spearman_Virulence assay results.csv')
+
+#Summarizing data
+
+DLAa<-Scatter %>%
+  group_by(Trial, Box, Variety, Isolate)%>%
+  dplyr::summarise(Avg_PctLesion=mean(pct_sympt))
+
+se <- function(x, na.rm) sd(x)/sqrt(sum(!is.na(x))) 
+
+DLAb<-DLAa %>%
+  group_by(Isolate, Variety) %>%
+  dplyr::summarise(counts=n(), Avg_PctLesion2=mean(Avg_PctLesion), SE_PctLesion2=se(Avg_PctLesion))
+
+DLAb$Isolate <- factor(DLAb$Isolate, levels=c("Control","AV13","Avoy1","RT1","ML1","DL24","AC2"))
+DLAb$Variety <- factor(DLAb$Variety, levels=c("AG53x9","DP3589"))
+
+#Creating graph
+p9<-ggplot(data=DLAb, aes(factor(Isolate), y=Avg_PctLesion2, fill=as.factor(Variety))) + 
+  geom_bar(stat="identity", position = "dodge",color='black')+
+  labs(x = "Isolate", y = "Disease severity (%)", fill="Variety")+
+  geom_errorbar(aes(ymin=Avg_PctLesion2-SE_PctLesion2, ymax=Avg_PctLesion2+SE_PctLesion2), width=.2,position=position_dodge(.9))+
+  facet_grid(~Variety)+
+  scale_fill_grey()
+
+p9+theme(axis.text.x=element_text(size=20,angle = 45, vjust = 1, hjust=1, face="bold", color = "black"),
+         axis.text.y= element_text(size=20,  face="bold", color = "black"),
+         axis.title=element_text(size=20, face="bold"))
+
+#ANOVA Sorting Trial 1
+Trial1<-DLAa %>%
+  filter(Trial=='1')
+
+Trial1$Variety<- as.factor(Trial1$Variety)
+Trial1$Isolate <- as.factor(Trial1$Isolate)
+
+#ANOVA TRIAL 1 Pct Symptomatic
+
+Trial1_PctSymptomatic_summary <- Trial1 %>%  group_by(Variety, Isolate) %>%
+  summarise(mean=mean(Avg_PctLesion), 
+            se=se(Avg_PctLesion)) %>%
+  arrange(desc(mean))
+
+Trial1.aov<- aov(Avg_PctLesion ~ Variety + Isolate + Variety:Isolate , data=Trial1)
+summary.aov(Trial1.aov)
+
+#Anova(Trial1.aov, type = "III")
+
+#Tukey's HSD  mean separation
+Trial2_final_tukey <- TukeyHSD(Trial1.aov)
+tukey.cld.Trial2_final <- multcompLetters4(Trial1.aov, Trial2_final_tukey)
+cldTrial2_final <- as.data.frame.list(tukey.cld.Trial2_final$`Isolate:Variety`)
+
+Trial1_PctSymptomatic_summary$Tukey <- cldTrial2_final$Letters
+print(Trial1_PctSymptomatic_summary)
+
+#1
+
+Trial1_PctSymptomatic_summary_Isolate <- Trial1 %>%  group_by(Isolate) %>%
+  summarise(mean=mean(Avg_PctLesion), 
+            se=se(Avg_PctLesion)) %>%
+  arrange(desc(mean))
+
+Trial1.aov<- aov(Avg_PctLesion ~ Isolate, data=Trial1)
+summary.aov(Trial1.aov)
+
+#Anova(Trial1.aov, type = "III")
+
+#Tukey's HSD  mean separation
+Trial2_final_tukey <- TukeyHSD(Trial1.aov)
+tukey.cld.Trial2_final <- multcompLetters4(Trial1.aov, Trial2_final_tukey)
+cldTrial2_final <- as.data.frame.list(tukey.cld.Trial2_final$`Isolate`)
+
+Trial1_PctSymptomatic_summary_Isolate$Tukey <- cldTrial2_final$Letters
+
+#Trial 1
+
+#2 AG53x9
+
+Trial1_PctSymptomatic_summary_VarietyIsolate <- Trial1 %>%  group_by(Variety, Isolate) %>%
+  summarise(mean=mean(Avg_PctLesion), 
+            se=se(Avg_PctLesion)) %>%
+  arrange(desc(mean))
+
+AG53x9_Trial1<-Trial1_PctSymptomatic_summary_VarietyIsolate %>%
+  filter(Variety=='AG53x9')
+
+DP3589_Trial1<-Trial1_PctSymptomatic_summary_VarietyIsolate %>%
+  filter(Variety=='DP3589')
+
+AG53x9.aov<- aov(Avg_PctLesion ~ Isolate, data=Trial1)
+summary.aov(AG53x9.aov)
+
+#Tukey's HSD  mean separation
+Trial1_final_tukey_AG53x9 <- TukeyHSD(AG53x9.aov)
+tukey.cld.Trial2_final <- multcompLetters4(AG53x9.aov, Trial1_final_tukey_AG53x9)
+cldTrial2_final <- as.data.frame.list(tukey.cld.Trial2_final$`Isolate`)
+AG53x9_Trial1$Tukey <- cldTrial2_final$Letters
+print(AG53x9_Trial1)
+
+DP3589.aov<- aov(Avg_PctLesion ~ Isolate, data=Trial1)
+summary.aov(DP3589.aov)
+
+#Tukey's HSD  mean separation
+Trial1_final_tukey_DP3589 <- TukeyHSD(DP3589.aov)
+tukey.cld.Trial2_final <- multcompLetters4(DP3589.aov, Trial1_final_tukey_DP3589)
+cldTrial2_final <- as.data.frame.list(tukey.cld.Trial2_final$`Isolate`)
+DP3589_Trial1$Tukey <- cldTrial2_final$Letters
+print(DP3589_Trial1)
+
+#Trial 2
+
+Trial1_tukey <- TukeyHSD(Trial1.aov)
+tukey.cld.Trial1 <- multcompLetters4(Trial1.aov, Trial1_tukey)
+cldTrial1 <- as.data.frame.list(tukey.cld.Trial1$`Variety:Isolate`)
+Trial1_PctSymptomatic_summary$Tukey <- cldTrial1$Letters
+print(Trial1_PctSymptomatic_summary)
+
+
+#ANOVA Sorting Trial 2
+Trial2<-DLAa %>%
+  filter(Trial=='2')
+
+Trial2$Variety<- as.factor(Trial2$Variety)
+Trial2$Isolate <- as.factor(Trial2$Isolate)
+
+
+#ANOVA TRIAL 1 Pct Symptomatic
+
+Trial2_PctSymptomatic_summary <- Trial2 %>%  group_by(Variety, Isolate) %>%
+  summarise(mean=mean(Avg_PctLesion), 
+            se=se(Avg_PctLesion)) %>%
+  arrange(desc(mean))
+
+Trial2.aov<- aov(Avg_PctLesion ~ Variety * Isolate, data=Trial2)
+summary.aov(Trial2.aov)
+
+#Anova(Trial1.aov, type = "III")
+
+#Tukey's HSD  mean separation
+Trial2_tukey <- TukeyHSD(Trial2.aov)
+tukey.cld.Trial2 <- multcompLetters4(Trial2.aov, Trial2_tukey)
+cldTrial2 <- as.data.frame.list(tukey.cld.Trial1$`Variety:Isolate`)
+Trial2_PctSymptomatic_summary$Tukey <- cldTrial2$Letters
+print(Trial2_PctSymptomatic_summary)
+
+
+```
+
+# Analysis of inoculum levels
+
+Data and analysis used to generate Figure 5
+
+
+```{r}
+#Load data
+InoculumData<-read_csv(file = 'New_4_Data_low_inoculum_levels_both_trial_1_trial_2.csv', na=c(".", "NA")) 
+
+AB_IL1<- InoculumData %>% 
+  mutate (Total_leaves= Num_nodes_pot*3,
+          Pct_symptomatic=(Num_symptleaf/Total_leaves)*100,
+          Pct_drop=(Num_dropleaf/Total_leaves)*100)
+
+#Summarizing across Variety, DAI and Inoculum amount  
+se <- function(x, na.rm) sd(x)/sqrt(sum(!is.na(x))) 
+
+AB_IL1a<- AB_IL1 %>%  
+  group_by(Trial, Inoculum_Amount, DAI, Variety)%>%
+  summarise(Num_rep= n(),
+            Median_DRating=median(Dis_rating),
+            Avg_sympleaf=mean(Pct_symptomatic),
+            Avg_dropleaf=mean(Pct_drop), 
+            SE_sympleaf=se(Pct_symptomatic),
+            SE_dropleaf=se(Pct_drop))
+#view(AB_IL1a)
+
+#Final day of Assesment 
+AB_IL1b<- AB_IL1 %>%  
+  group_by(Trial, Variety)%>%
+  summarise(Num_rep= n(),
+            Med_DRating=median(Dis_rating),
+            Avg_Fsympleaf=mean(Pct_symptomatic),
+            Avg_Fdropleaf=mean(Pct_drop), 
+            SE_Fsympleaf=se(Pct_symptomatic),
+            SE_Fdropleaf=se(Pct_drop))
+
+#AUDPC
+AB_VS2<- AB_IL1 %>%  
+  group_by(Trial, Inoculum_Amount, Variety, Rep)%>%
+  mutate (AUDPC_symleaf = audpc(Pct_symptomatic, DAI),
+          AUDPC_disrate = audpc(Dis_rating, DAI))
+
+
+#Summarizing AUDPC value for each Variety
+AB_VS2a<- AB_VS2 %>%  
+  group_by(Trial, Inoculum_Amount, DAI, Variety)%>%
+  summarise(counts= n(),
+            Avg_AUDPCSymp=mean(AUDPC_symleaf),
+            Avg_AUDPCDR=mean(AUDPC_disrate),
+            SE_AUSymL=se(AUDPC_symleaf),
+            SE_AUDR=se(AUDPC_disrate))
+
+AB_VS2a2<- AB_VS2 %>%  
+  group_by(Trial, Inoculum_Amount, Variety)%>%
+  summarise(Avg_AUDPCSymp=mean(AUDPC_symleaf),
+            Avg_AUDPCDR=mean(AUDPC_disrate),
+            SE_AUSymL=mean(se(AUDPC_symleaf)),
+            SE_AUDR=mean(se(AUDPC_disrate)))
+
+
+#Giving an specific order
+AB_VS2a2$Inoculum_Amount <- factor(AB_VS2a2$Inoculum_Amount, levels=c("0", "0.1", "0.5", "2"))
+
+#Graph of inoculum levels
+p9<-ggplot(data=AB_VS2a2, aes(factor(Inoculum_Amount), y=Avg_AUDPCSymp, fill=as.factor(Variety))) + 
+  geom_bar(stat="identity", position = "dodge",color='black')+
+  labs(x = "Amount of inoculum", y = "AUDPC of Percent Disease Severity", fill="Variety")+
+  geom_errorbar(aes(ymin=Avg_AUDPCSymp-SE_AUSymL, ymax=Avg_AUDPCSymp+SE_AUSymL), width=.2,position=position_dodge(.9))+
+  facet_wrap(~Trial)+
+  scale_fill_grey()
+
+p9+theme(axis.text.x=element_text(size=17,angle = 45, vjust = 1, hjust=1, face="bold", color = "black"),
+         axis.text.y= element_text(size=17,  face="bold", color = "black"),
+         axis.title=element_text(size=17, face="bold"),
+         strip.text = element_text(size = 17, face="bold"))
+
+
+```
+
+# Preliminary screening of seven varieties  
+
+Data and analysis used to generate Figure 6
+
+
+```{r}
+### Step 1: Importing data 
+AB_VS<- read_csv (file= 'VarietyScreening_v10_mod.csv',  na=c(".", "NA")) # Use file VarietyScreening_v10_mod.csv
+
+### Step 2: Data manupulation and exploration
+
+AB_VS1<- AB_VS %>% 
+  mutate (Total_leaves= Num_nodes_pot*3,
+          Pct_symptomatic=(Num_symptleaf/Total_leaves)*100,
+          Pct_drop=(Num_dropleaf/Total_leaves)*100)
+
+#Generating new response variable, AUDPC for percent symptomatic leaves and disease rating**
+AB_VS2<- AB_VS1 %>%  
+  group_by(Trial, Variety, Rep)%>%
+  mutate (AUDPC_symleaf = audpc(Pct_symptomatic, DAI),
+          AUDPC_disrate = audpc(Dis_rating, DAI))
+
+
+#function for calculating standard error
+se <- function(x, na.rm) sd(x)/sqrt(sum(!is.na(x))) 
+
+AB_VS1a<- AB_VS1 %>%  
+  group_by(Trial, DAI, Variety)%>%
+  summarise(Num_rep= n(),
+            Median_DRating=median(Dis_rating),
+            Avg_sympleaf=mean(Pct_symptomatic),
+            Avg_dropleaf=mean(Pct_drop), 
+            SE_sympleaf=se(Pct_symptomatic),
+            SE_dropleaf=se(Pct_drop))
+
+#view(PSL_final)
+
+PSL_final<-AB_VS1 %>%
+  filter(DAI=='20' | DAI=='20')
+
+PSL_finala<- AB_VS1 %>%  
+  group_by(Trial, Variety)%>%
+  summarise(Num_rep= n(),
+            Med_DRating=median(Dis_rating),
+            Avg_Fsympleaf=mean(Pct_symptomatic),
+            Avg_Fdropleaf=mean(Pct_drop), 
+            SE_Fsympleaf=se(Pct_symptomatic),
+            SE_Fdropleaf=se(Pct_drop))
+#function for calculating standard error
+se <- function(x, na.rm) sd(x)/sqrt(sum(!is.na(x))) 
+
+#Summarizing AUDPC response variables: AUDPC for disease rating and symptomatic leaves**
+AB_VS2a<- AB_VS2 %>%  
+  group_by(Trial, DAI, Variety)%>%
+  summarise(Num_rep= n(),
+            Avg_AUDPCSymp=mean(AUDPC_symleaf),
+            Avg_AUDPCDR=mean(AUDPC_disrate),
+            SE_AUSymL=se(AUDPC_symleaf),
+            SE_AUDR=se(AUDPC_disrate))
+
+
+AB_VS2ab<- AB_VS2a
+
+#Functions to Reorder bargraphs
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+level<-c("Trial 1","Trial 2")
+AB_VS2ab$Trial<-level[AB_VS2ab$Trial]
+
+
+#Plot of AUDPC of percent symptomatic leaves  5/18/2022
+graph4a<-ggplot(AB_VS2ab, aes(x=reorder_within(Variety, -Avg_AUDPCSymp, Trial), y=Avg_AUDPCSymp, fill=Variety))+
+  labs(x = "Cultivars", y = "Average AUDPC of percent disease severity")+
+  theme(axis.text.x=element_blank(), axis.ticks.x = element_blank())+
+  geom_bar(stat='identity', position=position_dodge(0.9))+
+  geom_errorbar(aes(ymin=Avg_AUDPCSymp-SE_AUSymL, ymax=Avg_AUDPCSymp+SE_AUSymL), width=.1, position=position_dodge(0.9))+
+  scale_x_reordered()+
+  facet_wrap(~Trial, scales = "free_x")+
+  scale_fill_grey()
+
+graph4a+theme(axis.text.x=element_text(size=12,angle = 45, vjust = 1, hjust=1, face="bold", color = "black"),
+              axis.text.y= element_text(size=12,  face="bold", color = "black"),
+              axis.title=element_text(size=12, face="bold"),
+              strip.text = element_text(size = 12, face="bold"))
+```
+
+# Regression analysis
+
+Data and analysis used to generate figures 7 and 8
+
+```{r}
+ 
+#Regression for Height to first true leaf 
+AB_CBVS<- read_csv (file= 'Coreblock_all_11_08_2022_mod_v1.csv',  na=c(".", "NA"))
+head(AB_CBVS)
+str(AB_CBVS)
+
+AUDPC_cor<- AB_CBVS
+
+AUDPC_corK<-AUDPC_cor %>%
+  filter(Trial=='Trial_1')
+AUDPC_cor1K<-AUDPC_corK %>%
+  filter(DAI=='21')
+AUDPC_cor2K<-AUDPC_cor %>%
+  filter(Trial=='Trial_2')
+AUDPC_cor2KD<-AUDPC_cor2K %>%
+  filter(DAI=='21')
+
+spearmancorr <- ggscatter(AUDPC_cor1K, x = "Num_symptleaf", y = "Height_toV1",
+                          add = "reg.line",  # Add regressin line
+                          title = "Trial 1",
+                          xlab ="Number of symptomatic leaves", 
+                          ylab = "Height to first true leaf (cm)",
+                          add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
+                          conf.int = TRUE) # Add confidence interval
+
+spearmancorr + stat_cor(p.accuracy = 0.001, r.accuracy = 0.01, method = "spearman")+
+  font("title",size = 15, face = "bold")+
+  font("xlab", size = 15, face = "bold")+
+  font("ylab", size = 15, face = "bold")+
+  font("xy.text", size = 15, face = "bold")
+
+```
+
+#Supplementary material 
+
+Data and figures used to generate supplementary figure 1
+
+```{r}
+#Figures on percentage disease severity in final assessment in the four levels of inouculum tested
+
+#Data should already be loaded ( R object: InoculumData)
+AB_IL1<- InoculumData %>% 
+  mutate (Total_leaves= Num_nodes_pot*3,
+          Pct_symptomatic=(Num_symptleaf/Total_leaves)*100,
+          Pct_drop=(Num_dropleaf/Total_leaves)*100)
+
+#Summarizing across Variety, DAI and Inoculum amount  
+se <- function(x, na.rm) sd(x)/sqrt(sum(!is.na(x))) 
+
+AB_IL1a<- AB_IL1 %>%  
+  group_by(Trial, Inoculum_Amount, DAI, Variety)%>%
+  summarise(Num_rep= n(),
+            Median_DRating=median(Dis_rating),
+            Avg_sympleaf=mean(Pct_symptomatic),
+            Avg_dropleaf=mean(Pct_drop), 
+            SE_sympleaf=se(Pct_symptomatic),
+            SE_dropleaf=se(Pct_drop))
+
+#AUDPC
+AB_VS2<- AB_IL1 %>%  
+  group_by(Trial, Inoculum_Amount, Variety, Rep)%>%
+  mutate (AUDPC_symleaf = audpc(Pct_symptomatic, DAI),
+          AUDPC_disrate = audpc(Dis_rating, DAI))
+
+#Graph for percentage disease severity
+AB_VS2$Inoculum_Amount <- factor(AB_VS2$Inoculum_Amount, levels=c("0", "0.1", "0.5", "2"))
+
+graph1a<-ggplot(AB_VS2, aes(x=Inoculum_Amount, y=AUDPC_symleaf, fill=Inoculum_Amount))+
+  labs(x = "Inoculum amount", y = "Percentage disease severity final day of assessment")+
+  geom_boxplot()+
+  facet_wrap(~Trial)
+plot(graph1a)
+
+#ANOVA
+#TRIAL 1
+Trial1<-AB_VS2 %>%
+  filter(Trial=='1')
+
+Trial1_final<-Trial1 %>%
+  filter(DAI=='33')
+
+Trial1$Variety<- as.factor(Trial1$Variety)
+Trial1$Inoculum_Amount <- as.factor(Trial1$Inoculum_Amount)
+Trial1$DAI <- as.factor(Trial1$DAI)
+
+#ANOVA TRIAL 1 Pct Symptomatic
+
+Trial1_PctSymptomatic_summary <- Trial1 %>%  group_by(Inoculum_Amount) %>%
+  summarise(mean=mean(Pct_symptomatic), 
+            se=se(Pct_symptomatic)) %>%
+  arrange(desc(mean))
+
+Trial1.aov<- aov(Pct_symptomatic ~ Inoculum_Amount, data=Trial1_final)
+summary.aov(Trial1.aov)
+
+#Anova(Trial2.aov, type = "III")
+
+#Tukey's HSD  mean separation
+Trial1tukey <- TukeyHSD(Trial1.aov)
+#tukey.cld.Trial1 <- multcompLetters4(Trial1.aov, Trial1_tukey)
+cldTrial1 <- as.data.frame.list(tukey.cld.Trial1$`Inoculum_Amount`)
+Trial1_PctSymptomatic_summary$Tukey <- cldTrial1$Letters
+print(Trial1_PctSymptomatic_summary)
+
+#TRIAL 2
+Trial2<-AB_VS2 %>%
+  filter(Trial=='1')
+
+Trial2_final<-Trial2 %>%
+  filter(DAI=='33')
+
+Trial2$Variety<- as.factor(Trial2$Variety)
+Trial2$Inoculum_Amount <- as.factor(Trial2$Inoculum_Amount)
+Trial2$DAI <- as.factor(Trial2$DAI)
+
+#ANOVA TRIAL 1 Pct Symptomatic
+
+Trial2_PctSymptomatic_summary <- Trial2 %>%  group_by(Inoculum_Amount) %>%
+  summarise(mean=mean(Pct_symptomatic), 
+            se=se(Pct_symptomatic)) %>%
+  arrange(desc(mean))
+
+Trial2.aov<- aov(Pct_symptomatic ~ Inoculum_Amount, data=Trial2_final)
+summary.aov(Trial2.aov)
+
+#Anova(Trial2.aov, type = "III")
+
+#Tukey's HSD  mean separation
+Trial2tukey <- TukeyHSD(Trial2.aov)
+#tukey.cld.Trial2 <- multcompLetters4(Trial2.aov, Trial2_tukey)
+cldTrial2 <- as.data.frame.list(tukey.cld.Trial2$`Inoculum_Amount`)
+Trial2_PctSymptomatic_summary$Tukey <- cldTrial2$Letters
+print(Trial2_PctSymptomatic_summary)
+```
+
+Data and figures used to generate supplementary figure 2
+```{r}
+
+```
+
+
+Data and figures used to generate supplementary figure 3
+
+```{r}
+#PIS screening 
+AB_PI<- read_csv (file='PI Seeds Trial_combined_v1_STS.csv',  na=c(".", "NA"), col_types = cols(Variety = col_character())) 
+#head(AB_PI)
+#str(AB_PI)
+#view(AB_PI)
+#levels(as.factor(AB_PI$Variety))
+
+#Summarising data across replicates
+
+AB_PI1<- AB_PI %>%  
+  group_by(Trial_num, DAI, Variety)%>%
+  summarise(Num_rep= n(),
+            Median_DRating=median(Rating))
+
+AB_PI2<- AB_PI %>%  
+  group_by(Trial_num, Variety, Plant_ID)%>%
+  summarise(
+    Num_rep= n(),
+    AUDPC_disrate = audpc(Rating, DAI))
+
+### Data for plotting ####
+AB_PI3<- AB_PI2 %>%  
+  group_by(Trial_num, Variety)%>%
+  summarise(
+    Avg_AUDPC_disrate = mean(AUDPC_disrate),
+    SE_AUDR=se(AUDPC_disrate))
+
+graph2b<-ggplot(AB_PI3, aes(x=Variety,Avg_AUDPC_disrate, y=Avg_AUDPC_disrate, fill=Variety))+
+  labs(x = "Plant introductions tested", y = "Average AUDPC of disease rating")+
+  theme(axis.title.x=element_text(face='bold',size=12), axis.text.x=element_text(face='bold', size=10, angle=25), axis.title.y=element_text(face='bold',size=12, vjust=0.8))+
+  guides(fill="none")+
+  geom_bar(stat='identity', position=position_dodge())+
+  geom_errorbar(aes(ymin=Avg_AUDPC_disrate-SE_AUDR, ymax=Avg_AUDPC_disrate+SE_AUDR), width=.1, position=position_dodge())+
+  facet_wrap(~Trial_num)
+plot(graph2b)
+
+ABPI_lm<-lm (AUDPC_disrate ~ Variety +Trial_num, data=AB_PI2)
+summary(ABPI_lm)
+par(mfrow=c(2,2))
+
+# get (adjusted) weight means per group
+ABPI_lm_means <- emmeans(object = ABPI_lm, specs = "Variety")
+
+# add letters to each mean
+ABPI_lm_means_cld <- cld(object = ABPI_lm_means, adjust = "Tukey", Letters = letters, alpha = 0.05)
+ABPI_lm_means_cld
+
+```
+
