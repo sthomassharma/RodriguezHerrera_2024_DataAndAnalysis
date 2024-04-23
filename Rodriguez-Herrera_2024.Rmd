@@ -2,10 +2,15 @@
 title: "Manuscript: Resistance screening assay for aerial blight"
 author: "Sara Thomas-Sharma"
 date: "2024-04-19"
-output: html_document
+output: 
+  html_document: 
+    number_sections: yes
+    theme: readable
+    toc: TRUE
+    toc_float: TRUE
 ---
 
-```{r}
+```{r, include=FALSE}
 # get working directory
 getwd()
 ```
@@ -618,3 +623,9 @@ ABPI_lm_means_cld
 
 ```
 
+# Computational environment
+```{r SessionInfo, eval=TRUE, echo=FALSE, results='markup'}
+R.Version()$version.string
+R.Version()$system
+sessionInfo()
+```
